@@ -9,29 +9,38 @@ load_dotenv()
 class Config:
     bot_token: str
     openai_api_key: str
-    yookassa_shop_id: str
-    yookassa_secret_key: str
+    crypto_bot_token: str
     admin_id: int
     webhook_url: str
     database_url: str
-
-    # Pricing (in RUB, stored as kopecks for YooKassa)
-    price_subscription: int = 299
-    price_mirror: int = 490
-    price_year: int = 990
-    price_ritual: int = 1490
 
     # Free limits per day
     free_card_of_day_limit: int = 1
     free_three_paths_limit: int = 1
 
 
+# Fixed USDT prices
+PRICES_USDT = {
+    "subscription": 3.5,
+    "mirror":       5.5,
+    "spread_year":  11.0,
+    "ritual":       17.0,
+}
+
+# Fixed TON prices (≈ 1 TON ~ 5.5 USD)
+PRICES_TON = {
+    "subscription": 0.7,
+    "mirror":       1.0,
+    "spread_year":  2.0,
+    "ritual":       3.1,
+}
+
+
 def load_config() -> Config:
     return Config(
         bot_token=os.getenv("BOT_TOKEN", ""),
         openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-        yookassa_shop_id=os.getenv("YOOKASSA_SHOP_ID", ""),
-        yookassa_secret_key=os.getenv("YOOKASSA_SECRET_KEY", ""),
+        crypto_bot_token=os.getenv("CRYPTO_BOT_TOKEN", ""),
         admin_id=int(os.getenv("ADMIN_ID", "0")),
         webhook_url=os.getenv("WEBHOOK_URL", ""),
         database_url=os.getenv("DATABASE_URL", "velhar.db"),

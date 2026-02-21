@@ -1,28 +1,28 @@
-import uuid
 from datetime import datetime, timedelta, timezone
 
+import aiosqlite
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from config import config
+from config import config, PRICES_USDT, PRICES_TON
 from database import (
     create_payment,
-    get_payment_by_id,
     update_payment_status,
+    get_payment_by_id,
     set_subscription,
-    get_user,
 )
-from keyboards.menus import payment_link_menu, back_to_main, subscription_menu
-from services.limiter import is_user_subscribed
+from keyboards.menus import (
+    back_to_main,
+    currency_select_menu,
+    payment_link_menu,
+)
+from services import cryptopay
 from texts.messages import (
-    PAYMENT_PENDING,
+    SUBSCRIPTION_ACTIVE,
     PAYMENT_SUCCESS_MIRROR,
     PAYMENT_SUCCESS_YEAR,
     PAYMENT_SUCCESS_RITUAL,
-    PAYMENT_NOT_FOUND,
-    PAYMENT_ERROR,
-    SUBSCRIPTION_ACTIVE,
 )
 
 router = Router()
@@ -30,98 +30,94 @@ router = Router()
 # ─── Product catalogue ────────────────────────────────────────────────────────
 
 PRODUCTS = {
-    "subscription": {
-        "label": "Подписка VELHAR на 30 дней",
-        "amount": config.price_subscription,
-    },
-    "mirror": {
-        "label": "Зеркало судьбы — глубокий расклад",
-        "amount": config.price_mirror,
-    },
-    "spread_year": {
-        "label": "Год под звёздами — расклад на год",
-        "amount": config.price_year,
-    },
-    "ritual": {
-        "label": "Ритуал полнолуния",
-        "amount": config.price_ritual,
-    },
+    "subscription": "Подписка VELHAR на 30 дней",
+    "mirror":       "Зеркало судьбы — глубокий расклад",
+    "spread_year":  "Год под звёздами — расклад на год",
+    "ritual":       "Ритуал полнолуния",
 }
 
 
-def _build_yookassa_payment(product_type: str, user_id: int) -> dict | None:
-    """
-    Create a YooKassa payment and return (payment_id, confirmation_url).
-    Returns None if YooKassa is not configured (useful for local testing).
-    """
-    if not config.yookassa_shop_id or not config.yookassa_secret_key:
-        return None
-
-    try:
-        from yookassa import Configuration, Payment as YKPayment
-
-        Configuration.account_id = config.yookassa_shop_id
-        Configuration.secret_key = config.yookassa_secret_key
-
-        product = PRODUCTS[product_type]
-        idempotency_key = str(uuid.uuid4())
-
-        payment = YKPayment.create(
-            {
-                "amount": {"value": str(product["amount"]) + ".00", "currency": "RUB"},
-                "confirmation": {
-                    "type": "redirect",
-                    "return_url": f"https://t.me/{config.webhook_url.split('/')[-1]}",
-                },
-                "capture": True,
-                "description": product["label"],
-                "metadata": {"user_id": user_id, "product_type": product_type},
-            },
-            idempotency_key,
-        )
-        return {"payment_id": payment.id, "url": payment.confirmation.confirmation_url}
-    except Exception as e:
-        print(f"YooKassa error: {e}")
-        return None
-
-
-# ─── Shared payment starter (called from spreads.py) ─────────────────────────
+# ─── Step 1: choose currency (called from spreads.py & subscription menu) ────
 
 async def _start_payment(callback: CallbackQuery, product_type: str):
-    """Initiate payment flow for any product."""
-    uid = callback.from_user.id
-    product = PRODUCTS.get(product_type)
-    if not product:
+    """Show currency selection screen."""
+    if product_type not in PRODUCTS:
         await callback.answer("Неизвестный продукт", show_alert=True)
         return
 
-    yk_data = _build_yookassa_payment(product_type, uid)
+    usdt = PRICES_USDT[product_type]
+    ton  = PRICES_TON[product_type]
+    label = PRODUCTS[product_type]
 
-    if yk_data:
-        payment_id = yk_data["payment_id"]
-        url = yk_data["url"]
-        await create_payment(uid, product["amount"], payment_id, product_type)
-        await callback.message.edit_text(
-            PAYMENT_PENDING,
-            reply_markup=payment_link_menu(url),
-            parse_mode="Markdown",
+    await callback.message.edit_text(
+        f"💫 *{label}*\n\n"
+        f"Выбери валюту оплаты:\n\n"
+        f"• USDT — `{usdt}` USDT\n"
+        f"• TON  — `{ton}` TON",
+        reply_markup=currency_select_menu(product_type),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+# ─── Step 2: create invoice after currency chosen ────────────────────────────
+
+@router.callback_query(F.data.startswith("pay:currency:"))
+async def cb_currency_selected(callback: CallbackQuery, state: FSMContext):
+    # callback_data: pay:currency:USDT:subscription
+    _, _, asset, product_type = callback.data.split(":", 3)
+    uid = callback.from_user.id
+
+    if product_type not in PRODUCTS:
+        await callback.answer()
+        return
+
+    amount = PRICES_USDT[product_type] if asset == "USDT" else PRICES_TON[product_type]
+    label  = PRODUCTS[product_type]
+
+    await callback.message.edit_text(
+        "Создаю счёт... ✨", reply_markup=None
+    )
+
+    try:
+        invoice = await cryptopay.create_invoice(
+            asset=asset,
+            amount=amount,
+            description=label,
+            payload=f"{uid}:{product_type}",
+            expires_in=3600,
         )
-    else:
-        # YooKassa not configured — show stub message for local dev
+    except Exception as e:
         await callback.message.edit_text(
-            f"💳 *{product['label']}*\n\n"
-            f"Стоимость: *{product['amount']}₽*\n\n"
-            "_YooKassa не настроена. В продакшне здесь появится ссылка на оплату._",
+            "Что-то нарушило платёжный поток... Попробуй позже.",
             reply_markup=back_to_main(),
-            parse_mode="Markdown",
         )
+        return
 
+    invoice_id  = invoice["invoice_id"]
+    pay_url     = invoice["bot_invoice_url"]
+
+    # Save to DB (store invoice_id as payment_id)
+    await create_payment(uid, amount, str(invoice_id), product_type)
+
+    await callback.message.edit_text(
+        f"💫 *{label}*\n\n"
+        f"Сумма: *{amount} {asset}*\n\n"
+        "Перейди по ссылке и оплати через @CryptoBot.\n"
+        "После оплаты нажми «Я оплатил» — и карты заговорят.",
+        reply_markup=payment_link_menu(pay_url),
+        parse_mode="Markdown",
+    )
     await callback.answer()
 
 
 # ─── Pay callbacks from subscription menu ────────────────────────────────────
 
-@router.callback_query(F.data.startswith("pay:") & ~F.data.startswith("pay:confirm") & ~F.data.startswith("pay:check"))
+@router.callback_query(
+    F.data.startswith("pay:")
+    & ~F.data.startswith("pay:currency:")
+    & ~F.data.startswith("pay:check")
+)
 async def cb_pay_product(callback: CallbackQuery, state: FSMContext):
     product_type = callback.data.split(":", 1)[1]
     if product_type not in PRODUCTS:
@@ -130,14 +126,12 @@ async def cb_pay_product(callback: CallbackQuery, state: FSMContext):
     await _start_payment(callback, product_type)
 
 
-# ─── Check payment status ─────────────────────────────────────────────────────
+# ─── Step 3: user pressed «Я оплатил» ────────────────────────────────────────
 
 @router.callback_query(F.data == "pay:check")
 async def cb_pay_check(callback: CallbackQuery, state: FSMContext):
     uid = callback.from_user.id
 
-    # Find the most recent pending payment for this user
-    import aiosqlite
     async with aiosqlite.connect(config.database_url) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -151,43 +145,36 @@ async def cb_pay_check(callback: CallbackQuery, state: FSMContext):
         await callback.answer("Ожидающий платёж не найден", show_alert=True)
         return
 
-    payment_id = payment_row["payment_id"]
+    invoice_id   = int(payment_row["payment_id"])
     product_type = payment_row["product_type"]
 
-    # Check with YooKassa
-    status = await _check_yookassa_status(payment_id)
+    try:
+        invoice = await cryptopay.get_invoice(invoice_id)
+        status  = invoice.get("status")
+    except Exception:
+        await callback.answer(
+            "Не удалось проверить статус. Попробуй чуть позже.",
+            show_alert=True,
+        )
+        return
 
-    if status == "succeeded":
-        await update_payment_status(payment_id, "succeeded")
+    if status == "paid":
+        await update_payment_status(str(invoice_id), "succeeded")
         await _handle_successful_payment(callback, uid, product_type, state)
-    elif status == "canceled":
-        await update_payment_status(payment_id, "canceled")
+    elif status == "expired":
+        await update_payment_status(str(invoice_id), "expired")
         await callback.message.edit_text(
-            "Платёж отменён. Если это ошибка — попробуй снова.",
+            "Время оплаты истекло... Создай новый счёт.",
             reply_markup=back_to_main(),
         )
     else:
         await callback.answer(
-            "Платёж ещё не подтверждён. Подожди немного и попробуй снова.",
+            "Оплата ещё не получена. Подожди немного и попробуй снова.",
             show_alert=True,
         )
 
 
-async def _check_yookassa_status(payment_id: str) -> str:
-    """Return YooKassa payment status string, or 'pending' on error."""
-    if not config.yookassa_shop_id:
-        return "pending"
-    try:
-        from yookassa import Configuration, Payment as YKPayment
-
-        Configuration.account_id = config.yookassa_shop_id
-        Configuration.secret_key = config.yookassa_secret_key
-        payment = YKPayment.find_one(payment_id)
-        return payment.status
-    except Exception as e:
-        print(f"YooKassa check error: {e}")
-        return "pending"
-
+# ─── Activate product after successful payment ────────────────────────────────
 
 async def _handle_successful_payment(
     callback: CallbackQuery,
@@ -195,7 +182,6 @@ async def _handle_successful_payment(
     product_type: str,
     state: FSMContext,
 ):
-    """Activate subscription or prompt for spread question."""
     from handlers.spreads import SpreadState
 
     if product_type == "subscription":
@@ -208,45 +194,49 @@ async def _handle_successful_payment(
     elif product_type == "mirror":
         await state.set_state(SpreadState.waiting_question_mirror)
         await callback.message.edit_text(
-            PAYMENT_SUCCESS_MIRROR, reply_markup=None, parse_mode="Markdown"
+            PAYMENT_SUCCESS_MIRROR, parse_mode="Markdown"
         )
 
     elif product_type == "spread_year":
         await state.set_state(SpreadState.waiting_question_year)
         await callback.message.edit_text(
-            PAYMENT_SUCCESS_YEAR, reply_markup=None, parse_mode="Markdown"
+            PAYMENT_SUCCESS_YEAR, parse_mode="Markdown"
         )
 
     elif product_type == "ritual":
         await state.set_state(SpreadState.waiting_question_ritual)
         await callback.message.edit_text(
-            PAYMENT_SUCCESS_RITUAL, reply_markup=None, parse_mode="Markdown"
+            PAYMENT_SUCCESS_RITUAL, parse_mode="Markdown"
         )
 
     await callback.answer()
 
 
-# ─── YooKassa Webhook handler (called from bot.py web server) ─────────────────
+# ─── CryptoPay Webhook (called from bot.py) ───────────────────────────────────
 
-async def process_webhook_event(event_data: dict, bot):
-    """Called by the aiohttp webhook route."""
-    try:
-        event_type = event_data.get("event")
-        obj = event_data.get("object", {})
-        payment_id = obj.get("id")
-        status = obj.get("status")
+async def process_cryptopay_webhook(body: bytes, signature: str, bot) -> bool:
+    """
+    Verify and handle an incoming CryptoPay webhook.
+    Returns True if handled successfully.
+    """
+    if not cryptopay.verify_webhook(body, config.crypto_bot_token, signature):
+        return False
 
-        if event_type != "payment.succeeded" or status != "succeeded":
-            return
+    import json
+    data   = json.loads(body)
+    if data.get("update_type") != "invoice_paid":
+        return True
 
-        payment_row = await get_payment_by_id(payment_id)
-        if not payment_row or payment_row["status"] == "succeeded":
-            return
+    invoice      = data.get("payload", {})
+    invoice_id   = str(invoice.get("invoice_id", ""))
+    raw_payload  = invoice.get("payload", "")   # "{uid}:{product_type}"
 
-        await update_payment_status(payment_id, "succeeded")
+    payment_row = await get_payment_by_id(invoice_id)
+    if payment_row and payment_row["status"] != "succeeded":
+        await update_payment_status(invoice_id, "succeeded")
 
-        uid = payment_row["user_id"]
-        product_type = payment_row["product_type"]
+        uid_str, product_type = raw_payload.split(":", 1)
+        uid = int(uid_str)
 
         if product_type == "subscription":
             until = datetime.now(timezone.utc) + timedelta(days=30)
@@ -262,5 +252,4 @@ async def process_webhook_event(event_data: dict, bot):
         elif product_type == "ritual":
             await bot.send_message(uid, PAYMENT_SUCCESS_RITUAL, parse_mode="Markdown")
 
-    except Exception as e:
-        print(f"Webhook processing error: {e}")
+    return True

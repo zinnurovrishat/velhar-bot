@@ -1,0 +1,17 @@
+[Unit]
+Description=VELHAR Tarot Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/velhar_bot
+EnvironmentFile=/opt/velhar_bot/.env
+ExecStart=/opt/velhar_bot/venv/bin/python bot.py webhook
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

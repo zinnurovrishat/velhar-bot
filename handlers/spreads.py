@@ -24,6 +24,7 @@ from services.limiter import (
 from services.moon import is_near_fullmoon
 from texts.messages import (
     ASK_QUESTION,
+    ASK_QUESTION_COMPAT,
     THINKING,
     LIMIT_REACHED,
     NOT_FULLMOON,
@@ -34,6 +35,7 @@ from texts.messages import (
     SPREAD_YEAR_INTRO,
     SPREAD_RITUAL_INTRO,
     SPREAD_MONTH_INTRO,
+    SPREAD_COMPAT_INTRO,
 )
 
 router = Router()
@@ -47,6 +49,7 @@ class SpreadState(StatesGroup):
     waiting_question_year     = State()
     waiting_question_ritual   = State()
     waiting_question_month    = State()
+    waiting_question_compat   = State()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,6 +233,29 @@ async def msg_ritual(message: Message, state: FSMContext):
         placeholder,
         SPREAD_RITUAL_INTRO,
         oracle.generate_fullmoon_ritual,
+        message.text,
+        counter_fn=increment_total_spreads,
+    )
+
+
+# ─── Compatibility spread (paid) ─────────────────────────────────────────────
+
+@router.callback_query(F.data == "spread:compat")
+async def cb_compat(callback: CallbackQuery, state: FSMContext):
+    from handlers.payment import _start_payment
+    await _start_payment(callback, "spread_compat")
+
+
+@router.message(SpreadState.waiting_question_compat)
+async def msg_compat(message: Message, state: FSMContext):
+    await state.clear()
+    placeholder = await message.answer(THINKING)
+    await message.bot.send_chat_action(message.chat.id, "typing")
+    await asyncio.sleep(3)
+    await _generate_and_send(
+        placeholder,
+        SPREAD_COMPAT_INTRO,
+        oracle.generate_compatibility,
         message.text,
         counter_fn=increment_total_spreads,
     )

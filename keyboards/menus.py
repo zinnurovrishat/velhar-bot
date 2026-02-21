@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from config import PRICES_USDT, PRICES_TON
+from config import PRICES_STARS
 
 
 def main_menu() -> InlineKeyboardMarkup:
@@ -17,6 +17,9 @@ def main_menu() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🪞 Зеркало судьбы", callback_data="spread:mirror"),
         InlineKeyboardButton(text="⭐ Год под звёздами", callback_data="spread:year"),
     )
+    builder.row(
+        InlineKeyboardButton(text="💞 Совместимость", callback_data="spread:compat"),
+    )
     return builder.as_markup()
 
 
@@ -25,56 +28,37 @@ def subscription_menu(is_subscribed: bool = False) -> InlineKeyboardMarkup:
     if not is_subscribed:
         builder.row(
             InlineKeyboardButton(
-                text=f"💫 Подписка — {PRICES_USDT['subscription']} USDT / {PRICES_TON['subscription']} TON",
+                text=f"💫 Подписка — {PRICES_STARS['subscription']} ⭐",
                 callback_data="pay:subscription",
             )
         )
     builder.row(
         InlineKeyboardButton(
-            text=f"🪞 Зеркало судьбы — {PRICES_USDT['mirror']} USDT",
+            text=f"🪞 Зеркало судьбы — {PRICES_STARS['mirror']} ⭐",
             callback_data="pay:mirror",
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text=f"⭐ Год под звёздами — {PRICES_USDT['spread_year']} USDT",
+            text=f"⭐ Год под звёздами — {PRICES_STARS['spread_year']} ⭐",
             callback_data="pay:spread_year",
         ),
     )
     builder.row(
         InlineKeyboardButton(
-            text=f"🌕 Ритуал полнолуния — {PRICES_USDT['ritual']} USDT",
+            text=f"💞 Совместимость — {PRICES_STARS['spread_compat']} ⭐",
+            callback_data="pay:spread_compat",
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=f"🌕 Ритуал полнолуния — {PRICES_STARS['ritual']} ⭐",
             callback_data="pay:ritual",
         ),
     )
     builder.row(
         InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main"),
     )
-    return builder.as_markup()
-
-
-def currency_select_menu(product_type: str) -> InlineKeyboardMarkup:
-    """Choose USDT or TON before creating invoice."""
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(
-            text=f"💵 USDT — {PRICES_USDT[product_type]}",
-            callback_data=f"pay:currency:USDT:{product_type}",
-        ),
-        InlineKeyboardButton(
-            text=f"💎 TON — {PRICES_TON[product_type]}",
-            callback_data=f"pay:currency:TON:{product_type}",
-        ),
-    )
-    builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="menu:subscription"))
-    return builder.as_markup()
-
-
-def payment_link_menu(url: str) -> InlineKeyboardMarkup:
-    builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="💳 Оплатить через CryptoBot", url=url))
-    builder.row(InlineKeyboardButton(text="✅ Я оплатил", callback_data="pay:check"))
-    builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="menu:main"))
     return builder.as_markup()
 
 

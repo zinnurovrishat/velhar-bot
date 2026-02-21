@@ -137,6 +137,28 @@ async def generate_fullmoon_ritual(question: str) -> str:
     return await _ask_velhar(prompt)
 
 
+async def generate_compatibility(question: str) -> str:
+    cards = draw_cards(6)
+    positions = [
+        "Энергия первой души",
+        "Энергия второй души",
+        "Что притягивает",
+        "Что разделяет",
+        "Скрытая нить",
+        "Послание союза",
+    ]
+    cards_block = "\n".join(
+        f"  {i+1}. {pos} — {card}"
+        for i, (pos, card) in enumerate(zip(positions, cards))
+    )
+    prompt = (
+        f"Пользователь просит расклад на совместимость двух людей. Запрос: «{question}»\n\n"
+        f"Шесть карт:\n{cards_block}\n\n"
+        "Дай глубокий расклад на совместимость. Длина: 400-550 слов."
+    )
+    return await _ask_velhar(prompt)
+
+
 async def generate_subscription_spread(question: str) -> str:
     """Расклад на месяц вперёд для подписчиков."""
     cards = draw_cards(4)

@@ -71,21 +71,6 @@ async def run_webhook():
 
     app.router.add_post(webhook_path, handle_telegram)
 
-    # ── CryptoPay payment webhook ──────────────────────────────────────────────
-    async def handle_cryptopay(request: web.Request) -> web.Response:
-        try:
-            body      = await request.read()
-            signature = request.headers.get("crypto-pay-api-signature", "")
-            ok = await payment.process_cryptopay_webhook(body, signature, bot)
-            if not ok:
-                logger.warning("CryptoPay webhook signature mismatch")
-                return web.Response(status=403)
-        except Exception as e:
-            logger.error(f"CryptoPay webhook error: {e}")
-        return web.Response()
-
-    app.router.add_post("/cryptopay/webhook", handle_cryptopay)
-
     # ── Health check ───────────────────────────────────────────────────────────
     async def health(_: web.Request) -> web.Response:
         return web.Response(text="VELHAR is alive")

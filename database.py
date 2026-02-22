@@ -64,6 +64,9 @@ async def init_db():
             ("referred_by",                "INTEGER"),
             ("referral_bonuses_available", "INTEGER DEFAULT 0"),
             ("last_active",                "DATETIME"),
+            ("ai_question_count",          "INTEGER DEFAULT 0"),
+            ("spreads_since_memory",       "INTEGER DEFAULT 0"),
+            ("velhar_state",               "TEXT DEFAULT 'calm'"),
         ]
         for col, definition in _new_cols:
             try:
@@ -425,6 +428,61 @@ async def get_payment_by_id(payment_id: str) -> Optional[dict]:
         ) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
+
+
+# ─── Velhar state & AI question counter ──────────────────────────────────────
+
+async def increment_ai_question_count(user_id: int) -> int:
+    """Increment and return the new ai_question_count."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET ai_question_count = ai_question_count + 1 WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+        async with db.execute(
+            "SELECT ai_question_count FROM users WHERE user_id = ?", (user_id,)
+        ) as cur:
+            row = await cur.fetchone()
+            return row[0] if row else 1
+
+
+async def set_velhar_state(user_id: int, state: str):
+    """Set velhar_state: 'calm' or 'cold'."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET velhar_state = ? WHERE user_id = ?",
+            (state, user_id),
+        )
+        await db.commit()
+
+
+async def reset_velhar_state(user_id: int):
+    """Reset to calm state and clear AI question counter."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET velhar_state = 'calm', ai_question_count = 0 WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+
+
+async def increment_spreads_since_memory(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET spreads_since_memory = spreads_since_memory + 1 WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
+
+
+async def reset_spreads_since_memory(user_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET spreads_since_memory = 0 WHERE user_id = ?",
+            (user_id,),
+        )
+        await db.commit()
 
 
 # ─── Stats ────────────────────────────────────────────────────────────────────

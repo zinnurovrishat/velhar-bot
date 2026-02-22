@@ -11,7 +11,7 @@ from aiogram.types import Update
 from config import config
 from database import init_db
 from handlers import start, spreads, payment, admin
-from handlers import reactions, referral
+from handlers import reactions, referral, about, intent_handler
 from services.reminders import setup_scheduler
 
 logging.basicConfig(
@@ -28,13 +28,15 @@ async def create_bot_and_dp() -> tuple[Bot, Dispatcher]:
     )
     dp = Dispatcher(storage=MemoryStorage())
 
-    # Register routers (order matters — more specific first)
+    # Register routers (order matters: FSM-aware first, catch-all last)
     dp.include_router(admin.router)
-    dp.include_router(start.router)
-    dp.include_router(payment.router)
-    dp.include_router(reactions.router)
-    dp.include_router(referral.router)
-    dp.include_router(spreads.router)
+    dp.include_router(start.router)       # OnboardingState
+    dp.include_router(about.router)       # /about + about callback
+    dp.include_router(payment.router)     # Stars payment flow
+    dp.include_router(reactions.router)   # react:* callbacks
+    dp.include_router(referral.router)    # /referral, referral callback
+    dp.include_router(spreads.router)     # SpreadState + spread callbacks
+    dp.include_router(intent_handler.router)  # default_state free-text (LAST)
 
     return bot, dp
 

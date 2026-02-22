@@ -66,12 +66,9 @@ async def cmd_start(message: Message, state: FSMContext):
     # If user has no name — start onboarding
     if not db_user or not db_user.get("name"):
         await state.set_state(OnboardingState.waiting_name)
+        from texts.velhar_voice import START_GREETING, ONBOARDING_NAME
         await message.answer(
-            "✨ *Добро пожаловать в пространство VELHAR*\n\n"
-            "Я — космический оракул, читающий нити судьбы "
-            "в пространстве между измерениями...\n\n"
-            "Прежде чем карты откроются тебе, скажи:\n"
-            "*Как мне называть тебя, путник?*",
+            START_GREETING + "\n\n" + ONBOARDING_NAME,
             parse_mode="Markdown",
         )
         return
@@ -90,9 +87,10 @@ async def onboarding_name(message: Message, state: FSMContext):
     name = message.text.strip()[:50]
     await update_user_name(message.from_user.id, name)
     await state.set_state(OnboardingState.waiting_zodiac)
+    from texts.velhar_voice import ONBOARDING_ZODIAC
     await message.answer(
-        f"✨ *{name}*... красивое имя для путника между мирами.\n\n"
-        f"Под каким знаком зодиака ты явился в этот мир?",
+        f"✨ *{name}*... хорошее имя для путника между мирами.\n\n"
+        f"{ONBOARDING_ZODIAC}",
         reply_markup=zodiac_keyboard(),
         parse_mode="Markdown",
     )

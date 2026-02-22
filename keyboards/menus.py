@@ -21,22 +21,16 @@ ZODIAC_SIGNS = [
 def main_menu() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="🌌 Карта дня",    callback_data="spread:card_of_day"),
-        InlineKeyboardButton(text="🔮 Три пути",      callback_data="spread:three_paths"),
+        InlineKeyboardButton(text="🌌 Карта дня",         callback_data="spread_day"),
+        InlineKeyboardButton(text="🔮 Задать вопрос",      callback_data="spread_question"),
     )
     builder.row(
-        InlineKeyboardButton(text="✨ Подписка",      callback_data="menu:subscription"),
-        InlineKeyboardButton(text="🌕 Ритуал",        callback_data="spread:ritual"),
+        InlineKeyboardButton(text="✨ Глубокий расклад",   callback_data="spread_deep"),
+        InlineKeyboardButton(text="🌙 Ритуал",             callback_data="ritual"),
     )
     builder.row(
-        InlineKeyboardButton(text="🪞 Зеркало судьбы",    callback_data="spread:mirror"),
-        InlineKeyboardButton(text="⭐ Год под звёздами",  callback_data="spread:year"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="💞 Совместимость", callback_data="spread:compat"),
-    )
-    builder.row(
-        InlineKeyboardButton(text="👥 Позвать друга", callback_data="menu:referral"),
+        InlineKeyboardButton(text="👥 Позвать друга",      callback_data="referral"),
+        InlineKeyboardButton(text="👁 Кто такой Велхар",   callback_data="about"),
     )
     return builder.as_markup()
 
@@ -78,7 +72,7 @@ def subscription_menu(is_subscribed: bool = False) -> InlineKeyboardMarkup:
         )
     builder.row(
         InlineKeyboardButton(
-            text=f"🪞 Зеркало судьбы — {PRICES_STARS['mirror']} ⭐",
+            text=f"✨ Глубокий расклад — {PRICES_STARS['mirror']} ⭐",
             callback_data="pay:mirror",
         ),
     )
@@ -115,10 +109,8 @@ def back_to_main() -> InlineKeyboardMarkup:
 def limit_reached_menu() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="✨ Открыть полный доступ", callback_data="menu:subscription")
-    )
-    builder.row(
-        InlineKeyboardButton(text="◀️ Главное меню", callback_data="menu:main")
+        InlineKeyboardButton(text="✨ Открыть доступ", callback_data="menu:subscription"),
+        InlineKeyboardButton(text="🌙 Вернуться завтра", callback_data="menu:main"),
     )
     return builder.as_markup()
 

@@ -24,7 +24,7 @@ async def cmd_referral(message: Message):
     await _send_referral_card(message.from_user.id, message, edit=False)
 
 
-@router.callback_query(F.data == "menu:referral")
+@router.callback_query(F.data.in_({"menu:referral", "referral"}))
 async def cb_referral(callback: CallbackQuery):
     await _send_referral_card(callback.from_user.id, callback.message, edit=True)
     await callback.answer()

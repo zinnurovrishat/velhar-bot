@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from aiohttp import web
 
@@ -12,6 +11,8 @@ from aiogram.types import Update
 from config import config
 from database import init_db
 from handlers import start, spreads, payment, admin
+from handlers import reactions, referral
+from services.reminders import setup_scheduler
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +32,8 @@ async def create_bot_and_dp() -> tuple[Bot, Dispatcher]:
     dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(payment.router)
+    dp.include_router(reactions.router)
+    dp.include_router(referral.router)
     dp.include_router(spreads.router)
 
     return bot, dp
@@ -41,40 +44,49 @@ async def create_bot_and_dp() -> tuple[Bot, Dispatcher]:
 async def run_polling():
     await init_db()
     bot, dp = await create_bot_and_dp()
+
+    # Start APScheduler
+    scheduler = setup_scheduler(bot)
+    scheduler.start()
+    logger.info("APScheduler started")
+
     logger.info("Starting VELHAR bot in polling mode...")
     try:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
+        scheduler.shutdown(wait=False)
         await bot.session.close()
 
 
-# ─── Webhook mode (production VPS) ───────────────────────────────────────────
+# ─── Webhook mode (production) ────────────────────────────────────────────────
 
 async def run_webhook():
     await init_db()
     bot, dp = await create_bot_and_dp()
 
+    # Start APScheduler
+    scheduler = setup_scheduler(bot)
+    scheduler.start()
+    logger.info("APScheduler started")
+
     webhook_path = f"/webhook/{config.bot_token}"
-    webhook_url = config.webhook_url.rstrip("/") + webhook_path
+    webhook_url  = config.webhook_url.rstrip("/") + webhook_path
 
     await bot.set_webhook(webhook_url)
     logger.info(f"Webhook set: {webhook_url}")
 
     app = web.Application()
 
-    # ── Telegram updates ──────────────────────────────────────────────────────
     async def handle_telegram(request: web.Request) -> web.Response:
-        data = await request.json()
+        data   = await request.json()
         update = Update(**data)
         await dp.feed_update(bot, update)
         return web.Response()
 
-    app.router.add_post(webhook_path, handle_telegram)
-
-    # ── Health check ───────────────────────────────────────────────────────────
     async def health(_: web.Request) -> web.Response:
         return web.Response(text="VELHAR is alive")
 
+    app.router.add_post(webhook_path, handle_telegram)
     app.router.add_get("/health", health)
 
     runner = web.AppRunner(app)
@@ -86,6 +98,7 @@ async def run_webhook():
     try:
         await asyncio.Event().wait()  # run forever
     finally:
+        scheduler.shutdown(wait=False)
         await bot.delete_webhook()
         await runner.cleanup()
         await bot.session.close()

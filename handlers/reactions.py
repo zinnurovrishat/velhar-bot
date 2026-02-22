@@ -19,6 +19,7 @@ async def react_me(callback: CallbackQuery):
 @router.callback_query(F.data == "react:more")
 async def react_more(callback: CallbackQuery):
     """User wants another question — show main menu."""
+    await callback.answer()  # answer first
     try:
         await callback.message.edit_reply_markup(reply_markup=None)
     except Exception:
@@ -27,25 +28,26 @@ async def react_more(callback: CallbackQuery):
         "✨ Звёзды готовы открыть новое послание.\nЧто тревожит твою душу?",
         reply_markup=main_menu(),
     )
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("react:share_"))
 async def react_share(callback: CallbackQuery):
     """Prepare a shareable text card from the spread."""
+    # Answer immediately — prevents Telegram loading spinner from hanging
+    await callback.answer()
+
     try:
         spread_id = int(callback.data.split("_", 1)[1])
     except (ValueError, IndexError):
-        await callback.answer("Ошибка", show_alert=True)
+        await callback.message.answer("❌ Не удалось загрузить расклад")
         return
 
     spread = await get_spread_by_id(spread_id)
     if not spread:
-        await callback.answer("Расклад не найден", show_alert=True)
+        await callback.message.answer("❌ Расклад не найден")
         return
 
     response_text = spread.get("response", "")
-    # Truncate to 700 chars to keep share card readable
     preview = response_text[:700].rstrip()
     if len(response_text) > 700:
         preview += "..."
@@ -58,4 +60,3 @@ async def react_share(callback: CallbackQuery):
     )
 
     await callback.message.answer(share_text, parse_mode="Markdown")
-    await callback.answer("✨ Послание готово к отправке!")

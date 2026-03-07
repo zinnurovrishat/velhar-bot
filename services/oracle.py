@@ -3,7 +3,10 @@ from openai import AsyncOpenAI
 from config import config
 from services.context import BASE_SYSTEM_PROMPT
 
-client = AsyncOpenAI(api_key=config.openai_api_key)
+client = AsyncOpenAI(
+    api_key=config.openrouter_api_key,
+    base_url="https://openrouter.ai/api/v1",
+)
 
 # Alias for legacy imports
 SYSTEM_PROMPT = BASE_SYSTEM_PROMPT
@@ -148,7 +151,7 @@ async def generate_subscription_spread(question: str, system_prompt: str | None 
 
 async def _ask_velhar(user_prompt: str, system_prompt: str | None = None) -> str:
     response = await client.chat.completions.create(
-        model="gpt-4o",
+        model="openai/gpt-4o-mini",
         max_tokens=2048,
         messages=[
             {"role": "system", "content": system_prompt or SYSTEM_PROMPT},
@@ -162,7 +165,7 @@ async def generate_summary(full_response: str) -> str:
     """Generate a 1-sentence summary of a spread for memory context."""
     try:
         resp = await client.chat.completions.create(
-            model="gpt-4o",
+            model="openai/gpt-4o-mini",
             max_tokens=60,
             messages=[
                 {

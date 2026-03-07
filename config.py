@@ -8,7 +8,7 @@ load_dotenv()
 @dataclass
 class Config:
     bot_token: str
-    openai_api_key: str
+    openrouter_api_key: str
     admin_id: int
     webhook_url: str
     database_url: str
@@ -49,7 +49,7 @@ PRODUCT_DESCRIPTIONS = {
 def load_config() -> Config:
     return Config(
         bot_token=os.getenv("BOT_TOKEN", ""),
-        openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+        openrouter_api_key=os.getenv("OPENROUTER_API_KEY", ""),
         admin_id=int(os.getenv("ADMIN_ID", "0")),
         webhook_url=os.getenv("WEBHOOK_URL", ""),
         database_url=os.getenv("DATABASE_URL", "velhar.db"),

@@ -54,6 +54,17 @@ async def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS journeys (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER NOT NULL,
+                started_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                current_day  INTEGER DEFAULT 1,
+                last_sent_at TIMESTAMP,
+                completed    INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
         # Idempotent migrations for users table
         _new_cols = [
             ("daily_paid_mirror",          "INTEGER DEFAULT 0"),
@@ -67,6 +78,9 @@ async def init_db():
             ("ai_question_count",          "INTEGER DEFAULT 0"),
             ("spreads_since_memory",       "INTEGER DEFAULT 0"),
             ("velhar_state",               "TEXT DEFAULT 'calm'"),
+            ("daily_notify",               "INTEGER DEFAULT 0"),
+            ("current_streak",             "INTEGER DEFAULT 0"),
+            ("last_streak_date",           "DATE"),
         ]
         for col, definition in _new_cols:
             try:
@@ -483,6 +497,135 @@ async def reset_spreads_since_memory(user_id: int):
             (user_id,),
         )
         await db.commit()
+
+
+# ─── Journey helpers ──────────────────────────────────────────────────────────
+
+async def create_journey(user_id: int) -> int:
+    """Create a new journey and return its id."""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute(
+            "INSERT INTO journeys (user_id, current_day, last_sent_at) VALUES (?, 1, ?)",
+            (user_id, now),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_active_journey(user_id: int) -> Optional[dict]:
+    """Return the active (non-completed) journey for a user, if any."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM journeys WHERE user_id = ? AND completed = 0 ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def advance_journey(journey_id: int):
+    """Increment current_day and update last_sent_at. Mark completed if day reaches 7."""
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT current_day FROM journeys WHERE id = ?", (journey_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return
+        new_day = (row["current_day"] or 1) + 1
+        completed = 1 if new_day > 7 else 0
+        await db.execute(
+            "UPDATE journeys SET current_day = ?, last_sent_at = ?, completed = ? WHERE id = ?",
+            (new_day, now, completed, journey_id),
+        )
+        await db.commit()
+
+
+async def get_pending_journey_deliveries() -> list[dict]:
+    """Return journeys where next day reading is due (last_sent_at > 23h ago, day < 8)."""
+    threshold = (datetime.utcnow() - timedelta(hours=23)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM journeys
+            WHERE completed = 0
+              AND current_day < 8
+              AND last_sent_at <= ?
+            """,
+            (threshold,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+# ─── Daily notify & Streaks ───────────────────────────────────────────────────
+
+async def set_daily_notify(user_id: int, enabled: bool):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "UPDATE users SET daily_notify = ? WHERE user_id = ?",
+            (1 if enabled else 0, user_id),
+        )
+        await db.commit()
+
+
+async def get_daily_notify_users() -> list[dict]:
+    """Return users who opted in to daily morning card."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE daily_notify = 1"
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
+
+
+async def update_streak(user_id: int) -> tuple[int, bool]:
+    """Update daily streak. Returns (new_streak, is_milestone)."""
+    today = date.today().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT current_streak, last_streak_date FROM users WHERE user_id = ?",
+            (user_id,),
+        ) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return 0, False
+        current = row["current_streak"] or 0
+        last_date = row["last_streak_date"]
+        if last_date == today:
+            return current, False
+        elif last_date == yesterday:
+            new_streak = current + 1
+        else:
+            new_streak = 1
+        await db.execute(
+            "UPDATE users SET current_streak = ?, last_streak_date = ? WHERE user_id = ?",
+            (new_streak, today, user_id),
+        )
+        await db.commit()
+        is_milestone = new_streak in (3, 7, 14, 30)
+        return new_streak, is_milestone
+
+
+async def get_users_streak_at_risk() -> list[dict]:
+    """Users who have a streak > 0 and last used the bot yesterday (streak breaks today)."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM users WHERE current_streak > 1 AND last_streak_date = ?",
+            (yesterday,),
+        ) as cur:
+            rows = await cur.fetchall()
+            return [dict(r) for r in rows]
 
 
 # ─── Stats ────────────────────────────────────────────────────────────────────

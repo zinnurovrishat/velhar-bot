@@ -2,7 +2,7 @@
 import logging
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import (
     get_user,
@@ -45,48 +45,63 @@ async def _send_referral_card(uid: int, msg: Message, edit: bool = False):
     bot_info = await msg.bot.get_me()
     link = f"https://t.me/{bot_info.username}?start={code}"
 
-    bonus_line = (
-        f"🎁 *У тебя есть {bonuses} бонусный расклад!*\n"
-        f"Нажми /use\\_bonus чтобы использовать его.\n\n"
-        if bonuses > 0 else ""
+    text = (
+        f"👥 *Приглашай друзей — получай бесплатные расклады*\n\n"
+        f"🎁 *За каждых 3 приглашённых → 1 бесплатный Глубокий расклад*\n\n"
+        f"Поделись ссылкой:\n\n"
+        f"`{link}`\n\n"
+        f"📊 *Твоя статистика:*\n"
+        f"• Приглашено душ: *{ref_count}*\n"
+        f"• Доступно бонусных раскладов: *{bonuses}*\n"
+        f"• До следующего бонуса: ещё *{next_bonus_in}*\n"
     )
 
-    text = (
-        f"👥 *Твой портал для друзей*\n\n"
-        f"Поделись ссылкой — и новые души откроют путь к звёздам:\n\n"
-        f"`{link}`\n\n"
-        f"{bonus_line}"
-        f"📊 *Статистика:*\n"
-        f"• Приглашено душ: *{ref_count}*\n"
-        f"• Бонусных раскладов: *{bonuses}*\n"
-        f"• До следующего бонуса: ещё *{next_bonus_in}* чел.\n\n"
-        f"_За каждых 3 приглашённых ты получаешь один бесплатный глубокий расклад_"
-    )
+    if bonuses > 0:
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"🎁 Использовать бонус ({bonuses} шт.)", callback_data="referral:use_bonus")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")],
+        ])
+    else:
+        markup = back_to_main()
 
     if edit:
-        await msg.edit_text(text, reply_markup=back_to_main(), parse_mode="Markdown")
+        await msg.edit_text(text, reply_markup=markup, parse_mode="Markdown")
     else:
-        await msg.answer(text, reply_markup=back_to_main(), parse_mode="Markdown")
+        await msg.answer(text, reply_markup=markup, parse_mode="Markdown")
 
 
 # ─── /use_bonus — activate bonus spread ──────────────────────────────────────
 
 @router.message(Command("use_bonus"))
 async def cmd_use_bonus(message: Message):
-    uid = message.from_user.id
+    await _activate_bonus(message.from_user.id, message, edit=False)
+
+
+@router.callback_query(F.data == "referral:use_bonus")
+async def cb_use_bonus(callback: CallbackQuery):
+    await _activate_bonus(callback.from_user.id, callback.message, edit=True)
+    await callback.answer()
+
+
+async def _activate_bonus(uid: int, msg: Message, edit: bool = False):
     consumed = await use_referral_bonus(uid)
     if not consumed:
-        await message.answer(
+        text = (
             "🌌 У тебя пока нет бонусных раскладов.\n\n"
-            "Приглашай друзей — за каждых 3 получай один бесплатный расклад!\n"
-            "/referral — твоя реферальная ссылка",
+            "Приглашай друзей — за каждых 3 получай один бесплатный глубокий расклад!"
         )
+        if edit:
+            await msg.edit_text(text, reply_markup=back_to_main())
+        else:
+            await msg.answer(text, reply_markup=back_to_main())
         return
 
-    await message.answer(
+    text = (
         "✨ *Бонусный расклад активирован!*\n\n"
         "Звёзды открывают для тебя особый канал...\n"
-        "Выбери расклад в главном меню — он будет бесплатным.",
-        reply_markup=back_to_main(),
-        parse_mode="Markdown",
+        "Выбери расклад в главном меню — он будет бесплатным."
     )
+    if edit:
+        await msg.edit_text(text, reply_markup=back_to_main(), parse_mode="Markdown")
+    else:
+        await msg.answer(text, reply_markup=back_to_main(), parse_mode="Markdown")

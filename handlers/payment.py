@@ -12,14 +12,16 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 
 from config import config, PRICES_STARS, PRODUCT_TITLES, PRODUCT_DESCRIPTIONS
-from database import set_subscription, create_payment, update_payment_status
-from keyboards.menus import back_to_main
+from database import set_subscription, create_payment, update_payment_status, create_journey, advance_journey, save_spread, get_user, get_recent_spreads
+from keyboards.menus import back_to_main, reaction_keyboard
 from texts.messages import (
     SUBSCRIPTION_ACTIVE,
     PAYMENT_SUCCESS_MIRROR,
     PAYMENT_SUCCESS_YEAR,
     PAYMENT_SUCCESS_RITUAL,
     PAYMENT_SUCCESS_COMPAT,
+    PAYMENT_SUCCESS_JOURNEY,
+    SPREAD_JOURNEY_DAY_INTRO,
 )
 
 router = Router()
@@ -116,3 +118,23 @@ async def successful_payment_handler(message: Message, state: FSMContext):
     elif product_type == "ritual":
         await state.set_state(SpreadState.waiting_question_ritual)
         await message.answer(PAYMENT_SUCCESS_RITUAL)
+
+    elif product_type == "journey":
+        await message.answer(PAYMENT_SUCCESS_JOURNEY)
+        # Deliver Day 1 immediately
+        journey_id = await create_journey(uid)
+        try:
+            import asyncio
+            from services import oracle
+            from services.context import build_system_prompt
+            user = await get_user(uid)
+            recent = await get_recent_spreads(uid, limit=3)
+            system_prompt = build_system_prompt(user or {}, recent)
+            await asyncio.sleep(2)
+            text = await oracle.generate_journey_day(1, system_prompt)
+            spread_id = await save_spread(uid, "journey_1", "День 1: Твоя текущая энергия", text, None)
+            intro = SPREAD_JOURNEY_DAY_INTRO.format(day=1)
+            await message.answer(intro + text, reply_markup=reaction_keyboard(spread_id), parse_mode="Markdown")
+        except Exception:
+            pass
+        await advance_journey(journey_id)

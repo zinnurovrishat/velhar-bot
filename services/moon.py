@@ -36,3 +36,10 @@ def days_to_fullmoon(dt: datetime | None = None) -> float:
 
 def is_near_fullmoon(tolerance_days: float = 2.0) -> bool:
     return abs(days_to_fullmoon()) <= tolerance_days
+
+
+def hours_in_fullmoon_window(tolerance_days: float = 2.0) -> int:
+    """Return hours remaining in the full moon window (0 if outside)."""
+    d = days_to_fullmoon()
+    remaining = tolerance_days - abs(d)
+    return max(0, int(remaining * 24))

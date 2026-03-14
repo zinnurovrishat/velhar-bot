@@ -20,11 +20,12 @@ class Config:
 
 # Prices in Telegram Stars (XTR)
 PRICES_STARS = {
-    "subscription":  30,
-    "mirror":        50,
-    "spread_year":   80,
-    "spread_compat": 50,
-    "ritual":       100,
+    "subscription":  100,
+    "mirror":        150,
+    "spread_year":   200,
+    "spread_compat": 200,
+    "ritual":        150,
+    "journey":       400,
 }
 
 # Invoice titles shown in Telegram payment UI (short, Velhar style)
@@ -34,6 +35,7 @@ PRODUCT_TITLES = {
     "spread_year":   "Год под звёздами",
     "spread_compat": "Нити судеб — совместимость",
     "ritual":        "Ритуал полнолуния",
+    "journey":       "Путь озарения — 7 дней",
 }
 
 # Invoice descriptions shown in Telegram payment UI
@@ -43,6 +45,7 @@ PRODUCT_DESCRIPTIONS = {
     "spread_year":   "Двенадцать карт — послание на каждый месяц года.",
     "spread_compat": "Карты откроют тайные нити между двумя душами.",
     "ritual":        "Семь карт в момент полной луны. Послание из глубин.",
+    "journey":       "7 дней, 7 карт, 7 тем. День 1 — сразу. Дни 2–7 — каждое утро.",
 }
 
 

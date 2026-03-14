@@ -29,9 +29,39 @@ def main_menu() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="🌙 Лунный путь",          callback_data="ritual"),
     )
     builder.row(
+        InlineKeyboardButton(text="🌟 Путь озарения — 7 дней", callback_data="menu:journey"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="🌅 Карта каждое утро",  callback_data="menu:daily_notify"),
+    )
+    builder.row(
         InlineKeyboardButton(text="👥 Позвать друга",      callback_data="referral"),
         InlineKeyboardButton(text="👁 Кто такой Велхар",   callback_data="about"),
     )
+    return builder.as_markup()
+
+
+def journey_intro_menu() -> InlineKeyboardMarkup:
+    """Вводный экран перед покупкой пути."""
+    from config import PRICES_STARS
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=f"🌟 Начать путь — {PRICES_STARS['journey']} ⭐",
+            callback_data="spread:journey",
+        )
+    )
+    builder.row(InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def daily_notify_menu(enabled: bool) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    if enabled:
+        builder.row(InlineKeyboardButton(text="🔕 Отключить", callback_data="notify:daily_off"))
+    else:
+        builder.row(InlineKeyboardButton(text="🌅 Включить", callback_data="notify:daily_on"))
+    builder.row(InlineKeyboardButton(text="◀️ Меню", callback_data="menu:main"))
     return builder.as_markup()
 
 
@@ -95,6 +125,12 @@ def subscription_menu(is_subscribed: bool = False) -> InlineKeyboardMarkup:
         ),
     )
     builder.row(
+        InlineKeyboardButton(
+            text=f"🌟 Путь озарения — {PRICES_STARS['journey']} ⭐",
+            callback_data="menu:journey",
+        ),
+    )
+    builder.row(
         InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main"),
     )
     return builder.as_markup()
@@ -118,4 +154,19 @@ def limit_reached_menu() -> InlineKeyboardMarkup:
 def cancel_input() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(InlineKeyboardButton(text="❌ Отмена", callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def upsell_deep_reading() -> InlineKeyboardMarkup:
+    """Показывается после бесплатного расклада — мягкий намёк на платный."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=f"🔮 Открыть глубокий расклад — {PRICES_STARS['mirror']} ⭐",
+            callback_data="spread:mirror",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")
+    )
     return builder.as_markup()

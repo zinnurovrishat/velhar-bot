@@ -1,7 +1,7 @@
 """Reaction buttons shown after each spread result."""
 import logging
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from database import get_spread_by_id
 from keyboards.menus import main_menu
@@ -59,4 +59,17 @@ async def react_share(callback: CallbackQuery):
         f"Получи своё послание: @{bot_info.username}"
     )
 
-    await callback.message.answer(share_text, parse_mode=None)
+    # Inline button to share to any Telegram chat
+    bot_url = f"https://t.me/{bot_info.username}"
+    share_markup = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="📤 Поделиться с другом",
+            url=f"https://t.me/share/url?url={bot_url}&text=Получи+своё+послание+от+Велхара"
+        )
+    ]])
+
+    await callback.message.answer(
+        share_text,
+        parse_mode=None,
+        reply_markup=share_markup,
+    )

@@ -53,7 +53,7 @@ async def generate_card_of_day(question: str, system_prompt: str | None = None) 
         f"Выпавшая карта: {card}\n\n"
         "Дай послание на день. Длина: 100-150 слов."
     )
-    return await _ask_velhar(prompt)
+    return await _ask_velhar(prompt, system_prompt)
 
 
 async def generate_three_paths(question: str, system_prompt: str | None = None) -> str:
@@ -147,6 +147,32 @@ async def generate_subscription_spread(question: str, system_prompt: str | None 
     return await _ask_velhar(prompt, system_prompt)
 
 
+JOURNEY_THEMES = [
+    ("Твоя текущая энергия",     "Раскрой, какая энергия реально присутствует в жизни этого человека прямо сейчас."),
+    ("Скрытые влияния",          "Раскрой, какие силы или паттерны действуют под поверхностью."),
+    ("Предстоящее испытание",    "Назови и освети то, с чем нужно встретиться или через что пройти."),
+    ("Внутренняя сила",          "Раскрой ресурсы, дары и стойкость, которые несёт этот человек."),
+    ("Точка перелома",           "Покажи, где возможна трансформация — где путь может измениться."),
+    ("Что нужно отпустить",      "Освети то, что больше не служит — что пришло время отпустить."),
+    ("Путь вперёд",              "Укажи на направление, которое зовёт эту душу."),
+]
+
+
+async def generate_journey_day(day: int, system_prompt: str | None = None) -> str:
+    """Генерирует расклад на один день пути (1–7)."""
+    idx = max(0, min(day - 1, 6))
+    theme, instruction = JOURNEY_THEMES[idx]
+    card = draw_cards(1)[0]
+    prompt = (
+        f"Это День {day} из 7 личного внутреннего путешествия.\n"
+        f"Тема дня: {theme}\n"
+        f"Выпавшая карта: {card}\n\n"
+        f"{instruction}\n"
+        "Длина: 150–200 слов. Говори напрямую, как будто обращаешься именно к этому человеку."
+    )
+    return await _ask_velhar(prompt, system_prompt)
+
+
 # ─── Core API call ────────────────────────────────────────────────────────────
 
 async def _ask_velhar(user_prompt: str, system_prompt: str | None = None) -> str:
@@ -159,6 +185,27 @@ async def _ask_velhar(user_prompt: str, system_prompt: str | None = None) -> str
         ],
     )
     return response.choices[0].message.content
+
+
+async def generate_share_card(spread_text: str) -> str:
+    """Из расклада генерирует 3–4 поэтические строки для пересылки. Без личных деталей."""
+    resp = await client.chat.completions.create(
+        model="openai/gpt-4o-mini",
+        max_tokens=120,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Ты — Велхар. Из текста расклада извлеки универсальное послание: "
+                    "3–4 короткие поэтические строки, которые могут резонировать с любым человеком. "
+                    "Никаких личных деталей. Никаких вступлений. "
+                    "Только суть — загадочно, глубоко, атмосферно. На русском языке."
+                ),
+            },
+            {"role": "user", "content": spread_text},
+        ],
+    )
+    return resp.choices[0].message.content.strip()
 
 
 async def generate_summary(full_response: str) -> str:

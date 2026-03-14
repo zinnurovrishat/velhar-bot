@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 from aiogram import Router, F
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ from database import (
     save_spread,
     increment_spreads_since_memory,
     reset_spreads_since_memory,
+    update_streak,
 )
 from keyboards.menus import (
     back_to_main,
@@ -25,6 +27,7 @@ from keyboards.menus import (
     limit_reached_menu,
     subscription_menu,
     reaction_keyboard,
+    upsell_deep_reading,
 )
 from services import oracle
 from services.context import build_system_prompt, get_moon_phase_text, get_time_of_day
@@ -38,7 +41,7 @@ from services.limiter import (
     can_use_ritual,
     is_user_subscribed,
 )
-from services.moon import is_near_fullmoon
+from services.moon import is_near_fullmoon, hours_in_fullmoon_window
 from texts.messages import (
     ASK_QUESTION,
     ASK_QUESTION_COMPAT,
@@ -52,7 +55,7 @@ from texts.messages import (
     SPREAD_MONTH_INTRO,
     SPREAD_COMPAT_INTRO,
 )
-from texts.velhar_voice import LIMIT_REACHED, get_loading
+from texts.velhar_voice import LIMIT_REACHED, get_loading, get_rare_card_prefix, get_collective_mysticism, get_card_draw_animation, get_upsell_tease, get_rare_card_upsell_tease
 
 router = Router()
 
@@ -79,8 +82,10 @@ async def _generate_and_send(
     user_id: int,
     spread_type: str,
     counter_fn=None,
-):
-    """Build context, optionally inject memory, call oracle, save, show reactions."""
+) -> bool:
+    """Build context, optionally inject memory, call oracle, save, show reactions.
+    Returns True if a rare card moment was triggered."""
+    draw_msg: Message | None = None
     try:
         await msg_placeholder.bot.send_chat_action(msg_placeholder.chat.id, "typing")
 
@@ -106,20 +111,64 @@ async def _generate_and_send(
         spread_id = await save_spread(user_id, spread_type, question, text, summary)
         await update_last_active(user_id)
 
+        # Rare card moment — 4% probability
+        rare_triggered = random.random() < 0.04
+        rare_prefix = get_rare_card_prefix() if rare_triggered else ""
+
+        # Collective mysticism — 10% probability
+        collective_prefix = get_collective_mysticism() if random.random() < 0.10 else ""
+
+        full_output = rare_prefix + collective_prefix + intro + text
+
+        # Reveal animation
         await msg_placeholder.delete()
-        await msg_placeholder.bot.send_message(
+        draw_msg = await msg_placeholder.bot.send_message(
             msg_placeholder.chat.id,
-            intro + text,
-            reply_markup=reaction_keyboard(spread_id),
-            parse_mode="Markdown",
+            get_card_draw_animation(),
         )
+        await asyncio.sleep(2)
+
+        try:
+            await draw_msg.edit_text(
+                full_output,
+                reply_markup=reaction_keyboard(spread_id),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            await draw_msg.edit_text(
+                full_output,
+                reply_markup=reaction_keyboard(spread_id),
+            )
 
         if counter_fn:
             await counter_fn(user_id)
 
+        # Streak tracking
+        streak, is_milestone = await update_streak(user_id)
+        if is_milestone:
+            from texts.messages import STREAK_MILESTONES
+            milestone_text = STREAK_MILESTONES.get(streak)
+            if milestone_text:
+                await asyncio.sleep(3)
+                await draw_msg.bot.send_message(
+                    draw_msg.chat.id, milestone_text, parse_mode="Markdown"
+                )
+
+        return rare_triggered
+
     except Exception as e:
         logger.exception("_generate_and_send failed (user=%s spread=%s): %s", user_id, spread_type, e)
-        await msg_placeholder.edit_text(ERROR_GENERIC, reply_markup=back_to_main())
+        error_target = draw_msg if draw_msg is not None else msg_placeholder
+        try:
+            await error_target.edit_text(ERROR_GENERIC, reply_markup=back_to_main())
+        except Exception:
+            try:
+                await msg_placeholder.bot.send_message(
+                    msg_placeholder.chat.id, ERROR_GENERIC, reply_markup=back_to_main()
+                )
+            except Exception:
+                pass
+    return False
 
 
 def _loading(spread_type: str) -> str:
@@ -152,11 +201,15 @@ async def msg_card_of_day(message: Message, state: FSMContext):
         return
     placeholder = await message.answer(_loading("spread_day"))
     await velhar_typing(message.bot, message.chat.id, long=True)
-    await _generate_and_send(
+    rare = await _generate_and_send(
         placeholder, SPREAD_CARD_OF_DAY_INTRO,
         oracle.generate_card_of_day, message.text,
         user_id=uid, spread_type="spread_day", counter_fn=increment_free_used,
     )
+    if rare:
+        await _maybe_rare_upsell(message)
+    else:
+        await _maybe_upsell(message, uid)
 
 
 # ─── Three paths / Задать вопрос  (spread_question / spread:three_paths) ──────
@@ -185,11 +238,15 @@ async def msg_three_paths(message: Message, state: FSMContext):
         return
     placeholder = await message.answer(_loading("spread_question"))
     await velhar_typing(message.bot, message.chat.id, long=True)
-    await _generate_and_send(
+    rare = await _generate_and_send(
         placeholder, SPREAD_THREE_PATHS_INTRO,
         oracle.generate_three_paths, message.text,
         user_id=uid, spread_type="spread_question", counter_fn=increment_free_used,
     )
+    if rare:
+        await _maybe_rare_upsell(message)
+    else:
+        await _maybe_upsell(message, uid)
 
 
 # ─── Deep spread / Глубокий расклад  (spread_deep / spread:mirror) ────────────
@@ -239,11 +296,72 @@ async def msg_year(message: Message, state: FSMContext):
 @router.callback_query(F.data.in_({"ritual", "spread:ritual"}))
 async def cb_ritual(callback: CallbackQuery, state: FSMContext):
     if not is_near_fullmoon():
-        await callback.message.edit_text(NOT_FULLMOON, reply_markup=back_to_main(), parse_mode="Markdown")
+        from services.context import get_days_until_fullmoon
+        days_left = get_days_until_fullmoon()
+        await callback.message.edit_text(
+            NOT_FULLMOON + f"\n\n_Следующее полнолуние — примерно через {days_left} дней._",
+            reply_markup=back_to_main(), parse_mode="Markdown"
+        )
         await callback.answer()
+        return
+    hours = hours_in_fullmoon_window()
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from config import PRICES_STARS
+    fomo_markup = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text=f"🌕 Открыть лунные врата — {PRICES_STARS['ritual']} ⭐", callback_data="ritual:confirm"),
+        ], [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")],
+    ])
+    await callback.message.edit_text(
+        f"🌕 *Лунные врата открыты.*\n\n"
+        f"Полнолуние наступило.\n"
+        f"Этот расклад раскрывает то, что скрыто под поверхностью текущего цикла.\n\n"
+        f"⏳ *Доступно ещё примерно {hours} часов.*\n\n"
+        f"Семь карт. Послание из глубин.",
+        reply_markup=fomo_markup,
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "ritual:confirm")
+async def cb_ritual_confirm(callback: CallbackQuery, state: FSMContext):
+    if not is_near_fullmoon():
+        await callback.answer("Окно закрылось.", show_alert=True)
         return
     from handlers.payment import _start_payment
     await _start_payment(callback, "ritual")
+
+
+# ─── Journey  (spread:journey / menu:journey) ─────────────────────────────────
+
+@router.callback_query(F.data == "menu:journey")
+async def cb_journey_intro(callback: CallbackQuery, state: FSMContext):
+    """Показывает вводный экран 7-дневного пути перед оплатой."""
+    from keyboards.menus import journey_intro_menu
+    await callback.message.edit_text(
+        "🌟 *Путь озарения — 7 дней*\n\n"
+        "В течение семи дней Велхар будет тянуть для тебя одну карту каждое утро.\n"
+        "Каждый день несёт свою тему — другой взгляд на себя.\n\n"
+        "📌 *Семь тем:*\n"
+        "День 1 — Твоя текущая энергия\n"
+        "День 2 — Скрытые влияния\n"
+        "День 3 — Предстоящее испытание\n"
+        "День 4 — Твоя внутренняя сила\n"
+        "День 5 — Точка перелома\n"
+        "День 6 — Что нужно отпустить\n"
+        "День 7 — Путь вперёд\n\n"
+        "День 1 приходит сразу после начала.\n"
+        "Дни 2–7 — каждое утро в 13:00 по МСК.",
+        reply_markup=journey_intro_menu(),
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "spread:journey")
+async def cb_journey(callback: CallbackQuery, state: FSMContext):
+    from handlers.payment import _start_payment
+    await _start_payment(callback, "journey")
 
 
 @router.message(SpreadState.waiting_question_ritual)
@@ -311,3 +429,26 @@ async def msg_month_spread(message: Message, state: FSMContext):
         oracle.generate_subscription_spread, message.text,
         user_id=uid, spread_type="month_spread", counter_fn=increment_total_spreads,
     )
+
+
+# ─── Post-spread upsell ───────────────────────────────────────────────────────
+
+async def _maybe_upsell(message: Message, uid: int):
+    """После бесплатного расклада намекает на платный (60% шанс).
+    Показывается только returning-пользователям с именем."""
+    db_user = await get_user(uid)
+    if not db_user or not db_user.get("name"):
+        return
+    total = db_user.get("total_spreads", 0) or 0
+    if total < 1:
+        return
+    if random.random() > 0.60:
+        return
+    await asyncio.sleep(4)
+    await message.answer(get_upsell_tease(), reply_markup=upsell_deep_reading(), parse_mode="Markdown")
+
+
+async def _maybe_rare_upsell(message: Message):
+    """После редкой карты — всегда показывает апселл."""
+    await asyncio.sleep(3)
+    await message.answer(get_rare_card_upsell_tease(), reply_markup=upsell_deep_reading(), parse_mode="Markdown")

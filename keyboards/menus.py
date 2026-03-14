@@ -26,7 +26,7 @@ def main_menu() -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(text="✨ Глубокий расклад",   callback_data="spread_deep"),
-        InlineKeyboardButton(text="🌙 Ритуал",             callback_data="ritual"),
+        InlineKeyboardButton(text="🌙 Лунный путь",          callback_data="ritual"),
     )
     builder.row(
         InlineKeyboardButton(text="👥 Позвать друга",      callback_data="referral"),
@@ -90,7 +90,7 @@ def subscription_menu(is_subscribed: bool = False) -> InlineKeyboardMarkup:
     )
     builder.row(
         InlineKeyboardButton(
-            text=f"🌕 Ритуал полнолуния — {PRICES_STARS['ritual']} ⭐",
+            text=f"🌕 Лунное послание — {PRICES_STARS['ritual']} ⭐",
             callback_data="pay:ritual",
         ),
     )

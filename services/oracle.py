@@ -71,7 +71,7 @@ async def generate_three_paths(question: str, system_prompt: str | None = None) 
 
 async def generate_mirror_of_fate(question: str, system_prompt: str | None = None) -> str:
     cards = draw_cards(5)
-    positions = ["Суть ситуации", "Скрытые силы", "Препятствие", "Ресурс", "Итог"]
+    positions = ["Текущая энергия", "Скрытые влияния", "Возможные вызовы", "Ресурсы", "Потенциальное направление"]
     cards_block = "\n".join(f"  {i+1}. {pos} — {card}"
                             for i, (pos, card) in enumerate(zip(positions, cards)))
     prompt = (

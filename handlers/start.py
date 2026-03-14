@@ -89,7 +89,7 @@ async def onboarding_name(message: Message, state: FSMContext):
     await state.set_state(OnboardingState.waiting_zodiac)
     from texts.velhar_voice import ONBOARDING_ZODIAC
     await message.answer(
-        f"✨ *{name}*... хорошее имя для путника между мирами.\n\n"
+        f"✨ *{name}*... хорошее имя.\n\n"
         f"{ONBOARDING_ZODIAC}",
         reply_markup=zodiac_keyboard(),
         parse_mode="Markdown",
@@ -110,9 +110,9 @@ async def onboarding_zodiac(callback: CallbackQuery, state: FSMContext):
     name = db_user.get("name", "путник") if db_user else "путник"
 
     await callback.message.edit_text(
-        f"🌌 *{zodiac}* — знак, несущий свою особую силу и свет...\n\n"
-        f"Добро пожаловать, *{name}*. Звёзды ждали твоего прихода.\n\n"
-        f"Что ведёт тебя сегодня?",
+        f"🌌 *{zodiac}* — знак с богатой символикой...\n\n"
+        f"Добро пожаловать, *{name}*. Рад, что ты здесь.\n\n"
+        f"Что ты хочешь исследовать сегодня?",
         reply_markup=main_menu(),
         parse_mode="Markdown",
     )

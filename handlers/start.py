@@ -14,10 +14,12 @@ from database import (
     set_referred_by,
     count_referrals,
     add_referral_bonus,
+    save_spread,
+    get_recent_spreads,
 )
-from keyboards.menus import main_menu, subscription_menu, zodiac_keyboard
+from keyboards.menus import main_menu, subscription_menu, zodiac_keyboard, reaction_keyboard
 from services.limiter import ensure_user, is_user_subscribed
-from texts.messages import WELCOME, WELCOME_BACK, SUBSCRIPTION_INFO
+from texts.messages import WELCOME, WELCOME_BACK, SUBSCRIPTION_INFO, SPREAD_CARD_OF_DAY_INTRO
 
 router = Router()
 
@@ -27,6 +29,41 @@ router = Router()
 class OnboardingState(StatesGroup):
     waiting_name   = State()
     waiting_zodiac = State()
+
+
+# ─── Welcome card (first-time users) ─────────────────────────────────────────
+
+async def _send_welcome_card(message: Message):
+    """Немедленная карта для новых пользователей — лимит не тратится."""
+    import services.oracle as oracle
+    from services.context import build_system_prompt
+
+    loading = await message.answer(
+        "Ты нашёл меня.\n\nПозволь вытянуть твою первую карту… 🌌",
+        parse_mode="Markdown",
+    )
+    try:
+        uid = message.from_user.id
+        user_row = await get_user(uid) or {}
+        recent = await get_recent_spreads(uid, limit=3)
+        system_prompt = build_system_prompt(user_row, recent)
+
+        reading = await oracle.generate_card_of_day(
+            "Общий расклад для первого посещения", system_prompt
+        )
+        spread_id = await save_spread(uid, "welcome", "первое посещение", reading, None)
+
+        await loading.edit_text(
+            SPREAD_CARD_OF_DAY_INTRO + reading,
+            reply_markup=reaction_keyboard(spread_id),
+            parse_mode="Markdown",
+        )
+    except Exception:
+        await loading.edit_text(
+            "Ты нашёл меня. 🌌\n\nВыбери, что ты хочешь исследовать сегодня.",
+            reply_markup=main_menu(),
+            parse_mode="Markdown",
+        )
 
 
 # ─── /start ───────────────────────────────────────────────────────────────────
@@ -63,14 +100,9 @@ async def cmd_start(message: Message, state: FSMContext):
 
     db_user = await get_user(user.id)
 
-    # If user has no name — start onboarding
+    # New user — immediate first card (wow effect, no limit charge)
     if not db_user or not db_user.get("name"):
-        await state.set_state(OnboardingState.waiting_name)
-        from texts.velhar_voice import START_GREETING, ONBOARDING_NAME
-        await message.answer(
-            START_GREETING + "\n\n" + ONBOARDING_NAME,
-            parse_mode="Markdown",
-        )
+        await _send_welcome_card(message)
         return
 
     # Returning user — generate code if missing, show menu

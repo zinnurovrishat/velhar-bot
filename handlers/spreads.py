@@ -1,5 +1,8 @@
 import asyncio
+import logging
 from aiogram import Router, F
+
+logger = logging.getLogger(__name__)
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -114,7 +117,8 @@ async def _generate_and_send(
         if counter_fn:
             await counter_fn(user_id)
 
-    except Exception:
+    except Exception as e:
+        logger.exception("_generate_and_send failed (user=%s spread=%s): %s", user_id, spread_type, e)
         await msg_placeholder.edit_text(ERROR_GENERIC, reply_markup=back_to_main())
 
 

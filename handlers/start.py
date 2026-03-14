@@ -1,6 +1,9 @@
+import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, CallbackQuery
+
+logger = logging.getLogger(__name__)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
@@ -58,7 +61,8 @@ async def _send_welcome_card(message: Message):
             reply_markup=reaction_keyboard(spread_id),
             parse_mode="Markdown",
         )
-    except Exception:
+    except Exception as e:
+        logger.exception("_send_welcome_card failed (uid=%s): %s", message.from_user.id, e)
         await loading.edit_text(
             "Ты нашёл меня. 🌌\n\nВыбери, что ты хочешь исследовать сегодня.",
             reply_markup=main_menu(),

@@ -59,4 +59,4 @@ async def react_share(callback: CallbackQuery):
         f"Получи своё послание: @{bot_info.username}"
     )
 
-    await callback.message.answer(share_text)
+    await callback.message.answer(share_text, parse_mode=None)

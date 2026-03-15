@@ -131,7 +131,7 @@ async def successful_payment_handler(message: Message, state: FSMContext):
             recent = await get_recent_spreads(uid, limit=3)
             system_prompt = build_system_prompt(user or {}, recent)
             await asyncio.sleep(2)
-            text = await oracle.generate_journey_day(1, system_prompt)
+            _, text = await oracle.generate_journey_day(1, system_prompt)
             spread_id = await save_spread(uid, "journey_1", "День 1: Твоя текущая энергия", text, None)
             intro = SPREAD_JOURNEY_DAY_INTRO.format(day=1)
             await message.answer(intro + text, reply_markup=reaction_keyboard(spread_id), parse_mode="Markdown")

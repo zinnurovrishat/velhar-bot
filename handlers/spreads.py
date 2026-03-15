@@ -30,6 +30,7 @@ from keyboards.menus import (
     upsell_deep_reading,
 )
 from services import oracle
+from services.oracle import CARD_IMAGES
 from services.context import build_system_prompt, get_moon_phase_text, get_time_of_day
 from services.memory import should_use_memory, MEMORY_ADDON
 from services.utils import velhar_typing
@@ -101,7 +102,8 @@ async def _generate_and_send(
         else:
             await increment_spreads_since_memory(user_id)
 
-        text = await generator_fn(question, system_prompt=system_prompt)
+        result = await generator_fn(question, system_prompt=system_prompt)
+        drawn_cards, text = result if isinstance(result, tuple) else ([], result)
 
         try:
             summary = await oracle.generate_summary(text)
@@ -120,8 +122,26 @@ async def _generate_and_send(
 
         full_output = rare_prefix + collective_prefix + intro + text
 
-        # Reveal animation
+        # Send card images (Major Arcana only, max 3)
+        card_imgs = [CARD_IMAGES[c] for c in drawn_cards if c in CARD_IMAGES][:3]
+
         await msg_placeholder.delete()
+
+        if len(card_imgs) == 1:
+            await msg_placeholder.bot.send_photo(
+                msg_placeholder.chat.id,
+                photo=card_imgs[0],
+                disable_notification=True,
+            )
+        elif len(card_imgs) > 1:
+            from aiogram.types import InputMediaPhoto
+            media = [InputMediaPhoto(media=url) for url in card_imgs]
+            await msg_placeholder.bot.send_media_group(
+                msg_placeholder.chat.id,
+                media=media,
+                disable_notification=True,
+            )
+
         draw_msg = await msg_placeholder.bot.send_message(
             msg_placeholder.chat.id,
             get_card_draw_animation(),

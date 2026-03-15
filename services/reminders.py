@@ -193,7 +193,7 @@ async def _deliver_journey_days():
             user = await get_user(uid)
             recent = await get_recent_spreads(uid, limit=3)
             system_prompt = build_system_prompt(user or {}, recent)
-            text = await oracle.generate_journey_day(day, system_prompt)
+            _, text = await oracle.generate_journey_day(day, system_prompt)
             spread_id = await save_spread(uid, f"journey_{day}", f"День {day}", text, None)
             intro = SPREAD_JOURNEY_DAY_INTRO.format(day=day)
             await _bot.send_message(
@@ -234,7 +234,7 @@ async def _send_daily_cards():
         try:
             recent = await get_recent_spreads(uid, limit=3)
             system_prompt = build_system_prompt(user, recent)
-            text = await oracle.generate_card_of_day("карта дня", system_prompt)
+            _, text = await oracle.generate_card_of_day("карта дня", system_prompt)
             spread_id = await save_spread(uid, "spread_day", "карта дня", text, None)
             await _bot.send_message(
                 uid,

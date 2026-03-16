@@ -170,3 +170,18 @@ def upsell_deep_reading() -> InlineKeyboardMarkup:
         InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")
     )
     return builder.as_markup()
+
+
+def upsell_journey() -> InlineKeyboardMarkup:
+    """После первых раскладов — предложить 7-дневный путь."""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text=f"🌟 Начать 7-дневный путь — {PRICES_STARS['journey']} ⭐",
+            callback_data="menu:journey",
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(text="◀️ В меню", callback_data="menu:main")
+    )
+    return builder.as_markup()

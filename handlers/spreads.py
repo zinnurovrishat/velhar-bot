@@ -28,6 +28,7 @@ from keyboards.menus import (
     subscription_menu,
     reaction_keyboard,
     upsell_deep_reading,
+    upsell_journey,
 )
 from services import oracle
 from services.oracle import CARD_IMAGES
@@ -454,18 +455,27 @@ async def msg_month_spread(message: Message, state: FSMContext):
 # ─── Post-spread upsell ───────────────────────────────────────────────────────
 
 async def _maybe_upsell(message: Message, uid: int):
-    """После бесплатного расклада намекает на платный (60% шанс).
-    Показывается только returning-пользователям с именем."""
+    """После бесплатного расклада намекает на платный (80% шанс).
+    Первые 3 расклада → Journey; далее → Mirror of Fate."""
     db_user = await get_user(uid)
     if not db_user or not db_user.get("name"):
         return
     total = db_user.get("total_spreads", 0) or 0
     if total < 1:
         return
-    if random.random() > 0.60:
+    if random.random() > 0.80:
         return
     await asyncio.sleep(4)
-    await message.answer(get_upsell_tease(), reply_markup=upsell_deep_reading(), parse_mode="Markdown")
+    if total < 3:
+        await message.answer(
+            "Шёпот услышан... 🌌\n\n"
+            "Хочешь идти глубже? *7 дней, 7 карт* — персональный путь под руководством Велхара.\n"
+            "Каждое утро новая карта и тема. Начало — сразу после старта.",
+            reply_markup=upsell_journey(),
+            parse_mode="Markdown",
+        )
+    else:
+        await message.answer(get_upsell_tease(), reply_markup=upsell_deep_reading(), parse_mode="Markdown")
 
 
 async def _maybe_rare_upsell(message: Message):

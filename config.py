@@ -20,12 +20,12 @@ class Config:
 
 # Prices in Telegram Stars (XTR)
 PRICES_STARS = {
-    "subscription":  100,
-    "mirror":        150,
-    "spread_year":   200,
-    "spread_compat": 200,
-    "ritual":        150,
-    "journey":       400,
+    "subscription":  500,
+    "mirror":        400,
+    "spread_year":   700,
+    "spread_compat": 400,
+    "ritual":        300,
+    "journey":       600,
 }
 
 # Invoice titles shown in Telegram payment UI (short, Velhar style)

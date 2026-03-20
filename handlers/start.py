@@ -51,7 +51,7 @@ async def _send_welcome_card(message: Message):
         recent = await get_recent_spreads(uid, limit=3)
         system_prompt = build_system_prompt(user_row, recent)
 
-        reading = await oracle.generate_card_of_day(
+        _, reading = await oracle.generate_card_of_day(
             "Общий расклад для первого посещения", system_prompt
         )
         spread_id = await save_spread(uid, "welcome", "первое посещение", reading, None)

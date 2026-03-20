@@ -45,8 +45,8 @@ async def _send_welcome_card(message: Message):
 
     loading = await message.answer(
         "Ты нашёл меня.\n\nПозволь вытянуть твою первую карту… 🌌",
-        parse_mode="Markdown",
     )
+    card_shown = False
     try:
         uid = message.from_user.id
         user_row = await get_user(uid) or {}
@@ -71,19 +71,24 @@ async def _send_welcome_card(message: Message):
                 card_text,
                 reply_markup=reaction_keyboard(spread_id),
             )
-        await asyncio.sleep(4)
+        card_shown = True
+    except Exception as e:
+        logger.exception("_send_welcome_card AI failed (uid=%s): %s", message.from_user.id, e)
+        try:
+            await loading.edit_text("Ты нашёл меня. 🌌")
+        except Exception:
+            pass
+
+    # Всегда показываем онбординг — даже если карта не сгенерировалась
+    await asyncio.sleep(2)
+    try:
         await message.answer(
             ONBOARDING_INTRO,
             reply_markup=main_menu(),
             parse_mode="Markdown",
         )
-    except Exception as e:
-        logger.exception("_send_welcome_card failed (uid=%s): %s", message.from_user.id, e)
-        await loading.edit_text(
-            "Ты нашёл меня. 🌌\n\nВыбери, что ты хочешь исследовать сегодня.",
-            reply_markup=main_menu(),
-            parse_mode="Markdown",
-        )
+    except Exception:
+        await message.answer(ONBOARDING_INTRO, reply_markup=main_menu())
 
 
 # ─── /start ───────────────────────────────────────────────────────────────────

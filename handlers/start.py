@@ -20,6 +20,7 @@ from database import (
     add_referral_bonus,
     save_spread,
     get_recent_spreads,
+    increment_free_used,
 )
 from keyboards.menus import main_menu, subscription_menu, zodiac_keyboard, reaction_keyboard
 from services.limiter import ensure_user, is_user_subscribed
@@ -56,6 +57,7 @@ async def _send_welcome_card(message: Message):
             "Общий расклад для первого посещения", system_prompt
         )
         spread_id = await save_spread(uid, "welcome", "первое посещение", reading, None)
+        await increment_free_used(uid)  # welcome card counts toward daily limit
 
         await loading.edit_text(
             SPREAD_CARD_OF_DAY_INTRO + reading,

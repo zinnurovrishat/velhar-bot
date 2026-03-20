@@ -82,11 +82,18 @@ async def react_share(callback: CallbackQuery):
         )
     ]])
 
-    await callback.message.answer(
-        share_message,
-        parse_mode="Markdown",
-        reply_markup=share_markup,
-    )
+    try:
+        await callback.message.answer(
+            share_message,
+            parse_mode="Markdown",
+            reply_markup=share_markup,
+        )
+    except Exception:
+        # Markdown parse failure — retry without formatting
+        await callback.message.answer(
+            share_message,
+            reply_markup=share_markup,
+        )
 
 
 # ─── Daily notify ─────────────────────────────────────────────────────────────

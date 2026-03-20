@@ -5,7 +5,7 @@ import urllib.parse
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
-from database import get_spread_by_id, get_user, set_daily_notify
+from database import get_user, set_daily_notify
 from keyboards.menus import main_menu, daily_notify_menu
 from texts.messages import (
     DAILY_NOTIFY_MENU_ON,
@@ -43,37 +43,25 @@ async def react_share(callback: CallbackQuery):
     """Generate a short poetic share card from the spread."""
     await callback.answer()
 
-    try:
-        spread_id = int(callback.data.split("_", 1)[1])
-    except (ValueError, IndexError):
-        await callback.message.answer("❌ Не удалось загрузить расклад")
-        return
+    # Use message text directly — no DB lookup needed, survives redeploys
+    response_text = (callback.message.text or "").strip()
 
-    spread = await get_spread_by_id(spread_id)
-    if not spread:
-        await callback.message.answer("❌ Расклад не найден")
-        return
-
-    response_text = spread.get("response", "").strip()
-
-    # Generate short universal poetic version for sharing
     from services import oracle
     try:
         short_text = await oracle.generate_share_card(response_text)
     except Exception:
-        short_text = response_text[:200]
+        short_text = response_text[:200] if response_text else "Велхар видит тебя."
 
     bot_info = await callback.bot.get_me()
     bot_username = bot_info.username
 
     share_message = (
-        f"✨ *Послание Велхара*\n\n"
+        f"✨ Послание Велхара\n\n"
         f"{short_text}\n\n"
         f"Вытяни свою карту: @{bot_username}"
     )
 
-    # Telegram share button
-    share_url = f"https://t.me/{bot_username}"
+    share_url = urllib.parse.quote(f"https://t.me/{bot_username}", safe="")
     quoted = urllib.parse.quote(short_text + f"\n\nВытяни свою карту: @{bot_username}")
     share_markup = InlineKeyboardMarkup(inline_keyboard=[[
         InlineKeyboardButton(
@@ -83,17 +71,9 @@ async def react_share(callback: CallbackQuery):
     ]])
 
     try:
-        await callback.message.answer(
-            share_message,
-            parse_mode="Markdown",
-            reply_markup=share_markup,
-        )
+        await callback.message.answer(share_message, reply_markup=share_markup)
     except Exception:
-        # Markdown parse failure — retry without formatting
-        await callback.message.answer(
-            share_message,
-            reply_markup=share_markup,
-        )
+        await callback.answer("❌ Не удалось создать карточку", show_alert=True)
 
 
 # ─── Daily notify ─────────────────────────────────────────────────────────────

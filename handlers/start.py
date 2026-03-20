@@ -70,6 +70,7 @@ async def _send_welcome_card(message: Message):
             await loading.edit_text(
                 card_text,
                 reply_markup=reaction_keyboard(spread_id),
+                parse_mode=None,
             )
         card_shown = True
     except Exception as e:

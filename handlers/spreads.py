@@ -159,6 +159,7 @@ async def _generate_and_send(
             await draw_msg.edit_text(
                 full_output,
                 reply_markup=reaction_keyboard(spread_id),
+                parse_mode=None,
             )
 
         if counter_fn:

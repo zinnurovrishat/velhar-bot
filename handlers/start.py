@@ -168,9 +168,15 @@ async def onboarding_zodiac(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "menu:main")
 async def cb_main_menu(callback: CallbackQuery):
-    await callback.message.edit_text(
-        WELCOME_BACK, reply_markup=main_menu(), parse_mode="Markdown"
-    )
+    try:
+        await callback.message.edit_text(
+            WELCOME_BACK, reply_markup=main_menu(), parse_mode="Markdown"
+        )
+    except Exception:
+        # Invoice and some message types can't be edited — send new message instead
+        await callback.message.answer(
+            WELCOME_BACK, reply_markup=main_menu(), parse_mode="Markdown"
+        )
     await callback.answer()
 
 

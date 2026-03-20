@@ -207,30 +207,19 @@ async def cb_card_of_day(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_text(LIMIT_REACHED, reply_markup=limit_reached_menu())
         await callback.answer()
         return
-    await state.set_state(SpreadState.waiting_question_card)
-    await callback.message.edit_text(ASK_QUESTION, reply_markup=cancel_input(), parse_mode="Markdown")
+    # Карта дня — автоматически, без вопроса
+    placeholder = await callback.message.edit_text(_loading("spread_day"), parse_mode="Markdown")
     await callback.answer()
-
-
-@router.message(SpreadState.waiting_question_card)
-async def msg_card_of_day(message: Message, state: FSMContext):
-    await state.clear()
-    uid = message.from_user.id
-    allowed, _ = await can_use_card_of_day(uid)
-    if not allowed:
-        await message.answer(LIMIT_REACHED, reply_markup=limit_reached_menu())
-        return
-    placeholder = await message.answer(_loading("spread_day"))
-    await velhar_typing(message.bot, message.chat.id, long=True)
+    await velhar_typing(callback.bot, callback.message.chat.id, long=True)
     rare = await _generate_and_send(
         placeholder, SPREAD_CARD_OF_DAY_INTRO,
-        oracle.generate_card_of_day, message.text,
+        oracle.generate_card_of_day, "Карта дня",
         user_id=uid, spread_type="spread_day", counter_fn=increment_free_used,
     )
     if rare:
-        await _maybe_rare_upsell(message)
+        await _maybe_rare_upsell(callback.message)
     else:
-        await _maybe_upsell(message, uid)
+        await _maybe_upsell(callback.message, uid)
 
 
 # ─── Three paths / Задать вопрос  (spread_question / spread:three_paths) ──────

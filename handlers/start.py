@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart
@@ -22,7 +23,7 @@ from database import (
 )
 from keyboards.menus import main_menu, subscription_menu, zodiac_keyboard, reaction_keyboard
 from services.limiter import ensure_user, is_user_subscribed
-from texts.messages import WELCOME, WELCOME_BACK, SUBSCRIPTION_INFO, SPREAD_CARD_OF_DAY_INTRO
+from texts.messages import WELCOME, WELCOME_BACK, SUBSCRIPTION_INFO, SPREAD_CARD_OF_DAY_INTRO, ONBOARDING_INTRO
 
 router = Router()
 
@@ -59,6 +60,12 @@ async def _send_welcome_card(message: Message):
         await loading.edit_text(
             SPREAD_CARD_OF_DAY_INTRO + reading,
             reply_markup=reaction_keyboard(spread_id),
+            parse_mode="Markdown",
+        )
+        await asyncio.sleep(4)
+        await message.answer(
+            ONBOARDING_INTRO,
+            reply_markup=main_menu(),
             parse_mode="Markdown",
         )
     except Exception as e:

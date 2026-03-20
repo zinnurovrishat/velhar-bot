@@ -71,9 +71,9 @@ async def react_share(callback: CallbackQuery):
     ]])
 
     try:
-        await callback.message.answer(share_message, reply_markup=share_markup)
-    except Exception:
-        await callback.answer("❌ Не удалось создать карточку", show_alert=True)
+        await callback.message.answer(share_message, reply_markup=share_markup, parse_mode=None)
+    except Exception as e:
+        logger.exception("react_share answer failed: %s", e)
 
 
 # ─── Daily notify ─────────────────────────────────────────────────────────────

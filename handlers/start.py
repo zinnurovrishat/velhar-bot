@@ -59,11 +59,18 @@ async def _send_welcome_card(message: Message):
         spread_id = await save_spread(uid, "welcome", "первое посещение", reading, None)
         await increment_free_used(uid)  # welcome card counts toward daily limit
 
-        await loading.edit_text(
-            SPREAD_CARD_OF_DAY_INTRO + reading,
-            reply_markup=reaction_keyboard(spread_id),
-            parse_mode="Markdown",
-        )
+        card_text = SPREAD_CARD_OF_DAY_INTRO + reading
+        try:
+            await loading.edit_text(
+                card_text,
+                reply_markup=reaction_keyboard(spread_id),
+                parse_mode="Markdown",
+            )
+        except Exception:
+            await loading.edit_text(
+                card_text,
+                reply_markup=reaction_keyboard(spread_id),
+            )
         await asyncio.sleep(4)
         await message.answer(
             ONBOARDING_INTRO,

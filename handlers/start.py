@@ -38,7 +38,7 @@ class OnboardingState(StatesGroup):
 
 # ─── Welcome card (first-time users) ─────────────────────────────────────────
 
-async def _send_welcome_card(message: Message):
+async def _send_welcome_card(message: Message, state: FSMContext):
     """Немедленная карта для новых пользователей — лимит не тратится."""
     import services.oracle as oracle
     from services.context import build_system_prompt
@@ -80,16 +80,11 @@ async def _send_welcome_card(message: Message):
         except Exception:
             pass
 
-    # Всегда показываем онбординг — даже если карта не сгенерировалась
+    # Спрашиваем имя — всегда, даже если карта не сгенерировалась
     await asyncio.sleep(2)
-    try:
-        await message.answer(
-            ONBOARDING_INTRO,
-            reply_markup=main_menu(),
-            parse_mode="Markdown",
-        )
-    except Exception:
-        await message.answer(ONBOARDING_INTRO, reply_markup=main_menu())
+    await state.set_state(OnboardingState.waiting_name)
+    from texts.velhar_voice import ONBOARDING_NAME
+    await message.answer(ONBOARDING_NAME, parse_mode=None)
 
 
 # ─── /start ───────────────────────────────────────────────────────────────────
@@ -128,7 +123,7 @@ async def cmd_start(message: Message, state: FSMContext):
 
     # New user — immediate first card (wow effect, no limit charge)
     if not db_user or not db_user.get("name"):
-        await _send_welcome_card(message)
+        await _send_welcome_card(message, state)
         return
 
     # Returning user — generate code if missing, show menu
@@ -168,12 +163,14 @@ async def onboarding_zodiac(callback: CallbackQuery, state: FSMContext):
     name = db_user.get("name", "путник") if db_user else "путник"
 
     await callback.message.edit_text(
-        f"🌌 *{zodiac}* — знак с богатой символикой...\n\n"
-        f"Добро пожаловать, *{name}*. Рад, что ты здесь.\n\n"
-        f"Что ты хочешь исследовать сегодня?",
-        reply_markup=main_menu(),
+        f"🌌 *{zodiac}* — знак с богатой символикой.\n\n"
+        f"Добро пожаловать, *{name}*. Рад, что ты здесь.",
         parse_mode="Markdown",
     )
+    try:
+        await callback.message.answer(ONBOARDING_INTRO, reply_markup=main_menu(), parse_mode="Markdown")
+    except Exception:
+        await callback.message.answer(ONBOARDING_INTRO, reply_markup=main_menu(), parse_mode=None)
     await callback.answer()
 
 

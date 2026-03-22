@@ -95,9 +95,15 @@ async def cmd_start(message: Message, state: FSMContext):
     await ensure_user(user.id, user.username)
     await update_last_active(user.id)
 
-    # Handle referral code: /start <REF_CODE>
+    # Handle start payload
     args = message.text.split(maxsplit=1)
     ref_code = args[1].strip() if len(args) > 1 else None
+
+    # Web funnel redirect: /start fullreading
+    from_web_funnel = ref_code == 'fullreading'
+    if from_web_funnel:
+        ref_code = None
+
     if ref_code:
         referrer = await find_user_by_referral_code(ref_code)
         if referrer and referrer["user_id"] != user.id:
@@ -128,6 +134,13 @@ async def cmd_start(message: Message, state: FSMContext):
 
     # Returning user — generate code if missing, show menu
     await generate_and_save_referral_code(user.id)
+    if from_web_funnel:
+        await message.answer(
+            "Карты уже ждут тебя...\n\nВыбери расклад — и Велхар скажет остальное. 🌌",
+            reply_markup=main_menu(),
+            parse_mode=None,
+        )
+        return
     is_new = db_user.get("total_spreads", 0) == 0
     text = WELCOME if is_new else WELCOME_BACK
     await message.answer(text, reply_markup=main_menu(), parse_mode="Markdown")
